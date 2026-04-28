@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CYBER // TEXT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05000f;
+    --cyan: #00fff0;
+    --magenta: #ff003c;
+    --white: #f5fbff;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Share Tech Mono', 'VT323', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* matrix rain canvas */
+  #rain {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    display: block;
+  }
+
+  /* CRT scanlines + vignette */
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0 2px,
+        rgba(0, 255, 240, 0.045) 2px 3px
+      );
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.75) 100%);
+  }
+
+  /* stage */
+  .stage {
+    position: relative;
+    z-index: 1;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    gap: 3rem;
+  }
+
+  .corner {
+    position: fixed;
+    z-index: 4;
+    color: var(--cyan);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    opacity: 0.55;
+    text-transform: uppercase;
+    pointer-events: none;
+    text-shadow: 0 0 6px rgba(0, 255, 240, 0.5);
+  }
+  .corner.tl { top: 1rem; left: 1.25rem; }
+  .corner.tr { top: 1rem; right: 1.25rem; }
+  .corner.bl { bottom: 1rem; left: 1.25rem; }
+  .corner.br { bottom: 1rem; right: 1.25rem; }
+
+  /* main display */
+  #display {
+    margin: 0;
+    text-align: center;
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: 0.04em;
+    font-size: clamp(2.4rem, 11vw, 9rem);
+    color: var(--white);
+    user-select: none;
+    text-shadow:
+      0 0 8px rgba(0, 255, 240, 0.6),
+      0 0 22px rgba(0, 255, 240, 0.35),
+      0 0 50px rgba(255, 0, 60, 0.18);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 95vw;
+  }
+
+  /* per-character */
+  .ch {
+    display: inline-block;
+    position: relative;
+    transform-origin: 50% 60%;
+    animation: jump 1.6s cubic-bezier(.5,.05,.3,1) infinite;
+    animation-delay: calc(var(--i) * 60ms);
+    will-change: transform;
+  }
+  .ch::before,
+  .ch::after {
+    content: attr(data-ch);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .ch::before {
+    color: var(--magenta);
+    transform: translate(-2px, 0);
+    text-shadow: 0 0 6px rgba(255, 0, 60, 0.6);
+  }
+  .ch::after {
+    color: var(--cyan);
+    transform: translate(2px, 0);
+    text-shadow: 0 0 6px rgba(0, 255, 240, 0.6);
+  }
+
+  @keyframes jump {
+    0%, 60%, 100% { transform: translateY(0); }
+    30%           { transform: translateY(-0.18em); }
+    35%           { transform: translateY(-0.16em) skewX(-4deg); }
+  }
+
+  /* short violent glitch applied randomly via JS */
+  .ch.glitch {
+    animation: glitch 220ms steps(2, end) 1;
+  }
+  @keyframes glitch {
+    0%   { transform: translate(0, 0); clip-path: inset(0 0 0 0); }
+    20%  { transform: translate(2px, -2px); clip-path: inset(20% 0 35% 0); }
+    40%  { transform: translate(-3px, 1px); clip-path: inset(55% 0 10% 0); }
+    60%  { transform: translate(2px, 2px);  clip-path: inset(5% 0 70% 0); }
+    80%  { transform: translate(-1px, -1px); clip-path: inset(40% 0 30% 0); }
+    100% { transform: translate(0, 0); clip-path: inset(0 0 0 0); }
+  }
+  .ch.glitch::before { transform: translate(-5px, 1px); }
+  .ch.glitch::after  { transform: translate(5px, -1px); }
+
+  /* prompt + input */
+  .prompt {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5ch;
+    padding: 0.55rem 1rem;
+    background: rgba(0, 20, 28, 0.55);
+    border: 1px solid rgba(0, 255, 240, 0.45);
+    box-shadow:
+      0 0 14px rgba(0, 255, 240, 0.18),
+      inset 0 0 18px rgba(0, 255, 240, 0.08);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    min-width: min(560px, 90vw);
+  }
+  .prompt::before {
+    content: ">";
+    color: var(--cyan);
+    font-size: 1.15rem;
+    text-shadow: 0 0 6px var(--cyan);
+  }
+  #text-input {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: var(--cyan);
+    caret-color: var(--cyan);
+    font: inherit;
+    font-size: 1.15rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.15rem 0;
+    min-width: 0;
+  }
+  #text-input::placeholder {
+    color: rgba(0, 255, 240, 0.45);
+    letter-spacing: 0.12em;
+  }
+  /* iOS zoom guard */
+  @media (max-width: 480px) {
+    #text-input { font-size: 16px; }
+  }
+  .blink {
+    width: 0.6ch;
+    height: 1.1em;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    animation: blink 1s steps(2, end) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .hint {
+    margin: -1.5rem 0 0;
+    text-align: center;
+    color: rgba(0, 255, 240, 0.55);
+    font-size: 0.78rem;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ch { animation: none; }
+    .blink { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <div class="corner tl">// SYS.NETRUNNER v2.077</div>
+  <div class="corner tr">UPLINK ::: STABLE</div>
+  <div class="corner bl">LAT 34.05 / LON -118.24</div>
+  <div class="corner br" id="clock">--:--:--</div>
+
+  <main class="stage">
+    <h1 id="display" aria-live="polite"></h1>
+    <p class="hint">type to override the signal</p>
+    <label class="prompt" for="text-input">
+      <input id="text-input" type="text" maxlength="40"
+             autocomplete="off" autocapitalize="characters"
+             spellcheck="false" autofocus
+             placeholder="WAKE UP SAMURAI">
+      <span class="blink" aria-hidden="true"></span>
+    </label>
+  </main>
+
+<script>
+(() => {
+  /* ---------- matrix rain ---------- */
+  const canvas = document.getElementById('rain');
+  const ctx = canvas.getContext('2d');
+  const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&*+=<>/\\';
+  const FONT_SIZE = 16;
+  let cols = 0, drops = [], dpr = 1;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.floor(window.innerWidth  * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width  = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    cols = Math.ceil(canvas.width / (FONT_SIZE * dpr));
+    drops = new Array(cols).fill(0).map(() => Math.random() * -50);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function drawRain() {
+    // translucent black wash for trailing
+    ctx.fillStyle = 'rgba(5, 0, 15, 0.085)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const size = FONT_SIZE * dpr;
+    ctx.font = `${size}px "Share Tech Mono", monospace`;
+    ctx.textBaseline = 'top';
+
+    for (let i = 0; i < cols; i++) {
+      const ch = GLYPHS.charAt((Math.random() * GLYPHS.length) | 0);
+      const x = i * size;
+      const y = drops[i] * size;
+
+      // bright head
+      ctx.fillStyle = 'rgba(220, 255, 252, 0.95)';
+      ctx.shadowColor = '#00fff0';
+      ctx.shadowBlur = 8;
+      ctx.fillText(ch, x, y);
+
+      // dimmer tail glyph slightly above
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0, 255, 240, 0.55)';
+      ctx.fillText(
+        GLYPHS.charAt((Math.random() * GLYPHS.length) | 0),
+        x, y - size
+      );
+
+      if (y > canvas.height && Math.random() > 0.975) {
+        drops[i] = Math.random() * -20;
+      }
+      drops[i] += 1;
+    }
+    requestAnimationFrame(drawRain);
+  }
+  requestAnimationFrame(drawRain);
+
+  /* ---------- main text render ---------- */
+  const display = document.getElementById('display');
+  const input = document.getElementById('text-input');
+
+  function render(text) {
+    const value = (text || input.placeholder || '').toString();
+    display.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    [...value].forEach((c, i) => {
+      const span = document.createElement('span');
+      span.className = 'ch';
+      span.style.setProperty('--i', i);
+      if (c === ' ') {
+        span.innerHTML = '&nbsp;';
+        span.dataset.ch = ' ';
+      } else {
+        span.textContent = c;
+        span.dataset.ch = c;
+      }
+      frag.appendChild(span);
+    });
+    display.appendChild(frag);
+  }
+
+  input.addEventListener('input', () => render(input.value));
+  render('');
+
+  /* ---------- random per-char glitch bursts ---------- */
+  function glitchTick() {
+    const chars = display.querySelectorAll('.ch');
+    if (chars.length) {
+      const burst = 1 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < burst; i++) {
+        const target = chars[(Math.random() * chars.length) | 0];
+        if (!target) continue;
+        target.classList.remove('glitch');
+        // force reflow so animation can replay
+        void target.offsetWidth;
+        target.classList.add('glitch');
+        setTimeout(() => target.classList.remove('glitch'), 240);
+      }
+    }
+    setTimeout(glitchTick, 1200 + Math.random() * 1800);
+  }
+  glitchTick();
+
+  /* ---------- corner clock ---------- */
+  const clock = document.getElementById('clock');
+  function tickClock() {
+    const d = new Date();
+    const pad = n => n.toString().padStart(2, '0');
+    clock.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // keep input focused when clicking empty area
+  document.addEventListener('click', e => {
+    if (!e.target.closest('input')) input.focus();
+  });
+})();
+</script>
+</body>
+</html>

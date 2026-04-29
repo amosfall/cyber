@@ -35,6 +35,33 @@
     display: block;
   }
 
+  /* drifting ghost layer — sits above rain, below stage */
+  #ghosts {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .ghost {
+    position: absolute;
+    left: 0;
+    white-space: pre-wrap;
+    font-family: 'Times New Roman', Times, serif;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    will-change: transform, opacity;
+    animation: ghost-drift var(--dur, 40s) linear forwards;
+    opacity: 0;
+  }
+  @keyframes ghost-drift {
+    0%   { transform: translateX(-40vw); opacity: 0; }
+    12%  { opacity: var(--max, 0.18); }
+    88%  { opacity: var(--max, 0.18); }
+    100% { transform: translateX(120vw); opacity: 0; }
+  }
+
   /* CRT scanlines + vignette */
   .scanlines {
     position: fixed;
@@ -228,6 +255,7 @@
 </head>
 <body>
   <canvas id="rain" aria-hidden="true"></canvas>
+  <div id="ghosts" aria-hidden="true"></div>
   <div class="scanlines" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
 
@@ -238,12 +266,12 @@
 
   <main class="stage">
     <h1 id="display" aria-live="polite"></h1>
-    <p class="hint">type to override the signal</p>
+    <p class="hint">type to override · ⌘↵ commit to memory</p>
     <label class="prompt" for="text-input">
       <textarea id="text-input" rows="1" maxlength="240"
                 autocomplete="off" autocapitalize="characters"
                 spellcheck="false" autofocus
-                placeholder="WAKE UP SAMURAI&#10;PRESS ENTER FOR NEW LINE"></textarea>
+                placeholder="WAKE UP SAMURAI&#10;⌘↵ COMMIT · ↵ NEWLINE"></textarea>
       <span class="blink" aria-hidden="true"></span>
     </label>
   </main>
@@ -389,6 +417,76 @@
     if (mismatched || n !== nodes.length) render('');
   }
   setInterval(tickDefault, 1000);
+
+  /* ---------- ghost history layer ---------- */
+  const HISTORY_KEY = 'cyber:history';
+  const HISTORY_MAX = 24;
+  const ghostsLayer = document.getElementById('ghosts');
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(s => typeof s === 'string') : [];
+    } catch { return []; }
+  }
+  function saveHistory(arr) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch {}
+  }
+  let history = loadHistory();
+
+  function rand(min, max) { return min + Math.random() * (max - min); }
+  function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+
+  function spawnGhost(text) {
+    if (!text) return;
+    const el = document.createElement('div');
+    el.className = 'ghost';
+    el.textContent = text;
+    const tint = Math.random();
+    const color = tint < 0.65
+      ? `rgba(0, 255, 240, ${rand(0.10, 0.20).toFixed(3)})`
+      : `rgba(255, 0, 60, ${rand(0.08, 0.16).toFixed(3)})`;
+    el.style.color = color;
+    el.style.textShadow = `0 0 8px ${color}`;
+    el.style.fontSize = rand(1.1, 2.4).toFixed(2) + 'rem';
+    el.style.top = rand(4, 88).toFixed(1) + '%';
+    el.style.setProperty('--dur', rand(28, 58).toFixed(1) + 's');
+    el.style.setProperty('--max', rand(0.14, 0.24).toFixed(3));
+    if (Math.random() < 0.5) el.style.animationDirection = 'reverse';
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    ghostsLayer.appendChild(el);
+  }
+
+  function commit(text) {
+    const t = (text || '').replace(/\s+$/g, '');
+    if (!t.trim()) return;
+    history.push(t);
+    if (history.length > HISTORY_MAX) history = history.slice(-HISTORY_MAX);
+    saveHistory(history);
+    spawnGhost(t);
+    input.value = '';
+    render('');
+    autoGrow();
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      commit(input.value);
+    }
+  });
+
+  // pre-warm a few ghosts from existing history, staggered
+  history.slice(-6).forEach(phrase => {
+    setTimeout(() => spawnGhost(phrase), rand(0, 10000));
+  });
+
+  function spawnLoop() {
+    if (history.length) spawnGhost(pick(history));
+    setTimeout(spawnLoop, rand(4000, 10000));
+  }
+  setTimeout(spawnLoop, rand(3000, 7000));
 
   /* ---------- random per-char glitch bursts ---------- */
   function glitchTick() {

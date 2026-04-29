@@ -249,7 +249,12 @@
   /* ---------- matrix rain ---------- */
   const canvas = document.getElementById('rain');
   const ctx = canvas.getContext('2d');
-  const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&*+=<>/\\';
+  // weighted toward binary + code-flavored ASCII
+  const GLYPHS = '01010101010101010101'
+               + 'abcdefghijklmnopqrstuvwxyz'
+               + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+               + '0123456789'
+               + '{}[]()<>;:,./\\=+-*&|^!?#$%@_';
   const FONT_SIZE = 16;
   let cols = 0, drops = [], dpr = 1;
 

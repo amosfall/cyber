@@ -255,8 +255,11 @@
                + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                + '0123456789'
                + '{}[]()<>;:,./\\=+-*&|^!?#$%@_';
-  const FONT_SIZE = 16;
-  let cols = 0, drops = [], dpr = 1;
+  const FONT_SIZE = 14;
+  // Share Tech Mono glyph advance ≈ 0.6em; pack columns tight, give rows breathing room
+  const COL_RATIO = 0.62;
+  const ROW_RATIO = 1.15;
+  let cols = 0, drops = [], dpr = 1, colW = 0, rowH = 0, fontPx = 0;
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -264,25 +267,27 @@
     canvas.height = Math.floor(window.innerHeight * dpr);
     canvas.style.width  = window.innerWidth + 'px';
     canvas.style.height = window.innerHeight + 'px';
-    cols = Math.ceil(canvas.width / (FONT_SIZE * dpr));
+    fontPx = FONT_SIZE * dpr;
+    colW = Math.max(1, Math.round(fontPx * COL_RATIO));
+    rowH = Math.max(1, Math.round(fontPx * ROW_RATIO));
+    cols = Math.ceil(canvas.width / colW);
     drops = new Array(cols).fill(0).map(() => Math.random() * -50);
   }
   window.addEventListener('resize', resize);
   resize();
 
   function drawRain() {
-    // translucent black wash for trailing
-    ctx.fillStyle = 'rgba(5, 0, 15, 0.085)';
+    // translucent black wash for trailing — denser glyphs need a faster fade so columns don't smear
+    ctx.fillStyle = 'rgba(5, 0, 15, 0.13)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const size = FONT_SIZE * dpr;
-    ctx.font = `${size}px "Share Tech Mono", monospace`;
+    ctx.font = `${fontPx}px "Share Tech Mono", monospace`;
     ctx.textBaseline = 'top';
 
     for (let i = 0; i < cols; i++) {
       const ch = GLYPHS.charAt((Math.random() * GLYPHS.length) | 0);
-      const x = i * size;
-      const y = drops[i] * size;
+      const x = i * colW;
+      const y = drops[i] * rowH;
 
       // bright head
       ctx.fillStyle = 'rgba(220, 255, 252, 0.95)';
@@ -290,12 +295,12 @@
       ctx.shadowBlur = 8;
       ctx.fillText(ch, x, y);
 
-      // dimmer tail glyph slightly above
+      // dimmer tail glyph one row above
       ctx.shadowBlur = 0;
       ctx.fillStyle = 'rgba(0, 255, 240, 0.55)';
       ctx.fillText(
         GLYPHS.charAt((Math.random() * GLYPHS.length) | 0),
-        x, y - size
+        x, y - rowH
       );
 
       if (y > canvas.height && Math.random() > 0.975) {

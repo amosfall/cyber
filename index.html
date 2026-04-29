@@ -320,8 +320,15 @@
   const display = document.getElementById('display');
   const input = document.getElementById('text-input');
 
+  function defaultText() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}\n${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
   function render(text) {
-    const value = (text || input.placeholder || '').toString();
+    const raw = (text == null ? '' : text.toString());
+    const value = raw.length ? raw : defaultText();
     display.innerHTML = '';
     const frag = document.createDocumentFragment();
     let i = 0;
@@ -357,6 +364,31 @@
   });
   render('');
   autoGrow();
+
+  // keep default clock ticking without rebuilding the DOM (preserves wave animation)
+  function tickDefault() {
+    if (input.value) return;
+    const value = defaultText();
+    const nodes = display.querySelectorAll('.ch');
+    let n = 0;
+    let mismatched = false;
+    for (const c of value) {
+      if (c === '\n') continue;
+      const node = nodes[n++];
+      if (!node) { mismatched = true; break; }
+      if (node.dataset.ch !== c) {
+        if (c === ' ') {
+          node.innerHTML = '&nbsp;';
+          node.dataset.ch = ' ';
+        } else {
+          node.textContent = c;
+          node.dataset.ch = c;
+        }
+      }
+    }
+    if (mismatched || n !== nodes.length) render('');
+  }
+  setInterval(tickDefault, 1000);
 
   /* ---------- random per-char glitch bursts ---------- */
   function glitchTick() {

@@ -39,7 +39,7 @@
   #ghosts {
     position: fixed;
     inset: 0;
-    z-index: 0;
+    z-index: 1;
     pointer-events: none;
     overflow: hidden;
   }
@@ -52,14 +52,19 @@
     line-height: 1.1;
     text-transform: uppercase;
     will-change: transform, opacity;
-    animation: ghost-drift var(--dur, 40s) linear forwards;
+    animation: ghost-drift var(--dur, 28s) linear forwards;
     opacity: 0;
+    mix-blend-mode: screen;
   }
   @keyframes ghost-drift {
     0%   { transform: translateX(-40vw); opacity: 0; }
-    12%  { opacity: var(--max, 0.18); }
-    88%  { opacity: var(--max, 0.18); }
+    8%   { opacity: var(--max, 0.32); }
+    92%  { opacity: var(--max, 0.32); }
     100% { transform: translateX(120vw); opacity: 0; }
+  }
+  .ghost.fresh {
+    animation-duration: var(--dur, 18s);
+    font-weight: 700;
   }
 
   /* CRT scanlines + vignette */
@@ -438,21 +443,22 @@
   function rand(min, max) { return min + Math.random() * (max - min); }
   function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
 
-  function spawnGhost(text) {
+  function spawnGhost(text, opts = {}) {
     if (!text) return;
     const el = document.createElement('div');
-    el.className = 'ghost';
+    el.className = opts.fresh ? 'ghost fresh' : 'ghost';
     el.textContent = text;
     const tint = Math.random();
+    const baseAlpha = opts.fresh ? rand(0.55, 0.85) : rand(0.32, 0.55);
     const color = tint < 0.65
-      ? `rgba(0, 255, 240, ${rand(0.10, 0.20).toFixed(3)})`
-      : `rgba(255, 0, 60, ${rand(0.08, 0.16).toFixed(3)})`;
+      ? `rgba(120, 255, 245, ${baseAlpha.toFixed(3)})`
+      : `rgba(255, 90, 130, ${baseAlpha.toFixed(3)})`;
     el.style.color = color;
-    el.style.textShadow = `0 0 8px ${color}`;
-    el.style.fontSize = rand(1.1, 2.4).toFixed(2) + 'rem';
-    el.style.top = rand(4, 88).toFixed(1) + '%';
-    el.style.setProperty('--dur', rand(28, 58).toFixed(1) + 's');
-    el.style.setProperty('--max', rand(0.14, 0.24).toFixed(3));
+    el.style.textShadow = `0 0 10px ${color}, 0 0 22px ${color}`;
+    el.style.fontSize = (opts.fresh ? rand(1.6, 2.6) : rand(1.2, 2.4)).toFixed(2) + 'rem';
+    el.style.top = rand(6, 86).toFixed(1) + '%';
+    el.style.setProperty('--dur', (opts.fresh ? rand(14, 22) : rand(20, 38)).toFixed(1) + 's');
+    el.style.setProperty('--max', (opts.fresh ? rand(0.55, 0.8) : rand(0.28, 0.45)).toFixed(3));
     if (Math.random() < 0.5) el.style.animationDirection = 'reverse';
     el.addEventListener('animationend', () => el.remove(), { once: true });
     ghostsLayer.appendChild(el);
@@ -464,7 +470,8 @@
     history.push(t);
     if (history.length > HISTORY_MAX) history = history.slice(-HISTORY_MAX);
     saveHistory(history);
-    spawnGhost(t);
+    spawnGhost(t, { fresh: true });
+    setTimeout(() => spawnGhost(t), 600);
     input.value = '';
     render('');
     autoGrow();
@@ -477,16 +484,16 @@
     }
   });
 
-  // pre-warm a few ghosts from existing history, staggered
-  history.slice(-6).forEach(phrase => {
-    setTimeout(() => spawnGhost(phrase), rand(0, 10000));
+  // pre-warm a few ghosts from existing history, lightly staggered
+  history.slice(-8).forEach((phrase, idx) => {
+    setTimeout(() => spawnGhost(phrase), 200 + idx * rand(800, 1800));
   });
 
   function spawnLoop() {
     if (history.length) spawnGhost(pick(history));
-    setTimeout(spawnLoop, rand(4000, 10000));
+    setTimeout(spawnLoop, history.length ? rand(2200, 5500) : 1500);
   }
-  setTimeout(spawnLoop, rand(3000, 7000));
+  setTimeout(spawnLoop, 1500);
 
   /* ---------- random per-char glitch bursts ---------- */
   function glitchTick() {
